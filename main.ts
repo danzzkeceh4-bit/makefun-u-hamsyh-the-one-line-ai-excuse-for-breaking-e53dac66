@@ -19,6 +19,26 @@ if (codePoints.length < 1 || codePoints.length > 180) {
 if (LINE.trim().length === 0 || LINE.includes("\n")) {
   throw new Error("entry must be a single non-blank line");
 }
+// Reject control characters (other than the already-excluded newline)
+// and accidental double spaces: either would silently change what the
+// sealed scorer reads, so fail loudly instead of shipping it.
+if (/[\u0000-\u001F\u007F]/.test(LINE)) {
+  throw new Error("entry must not contain control characters");
+}
+if (LINE.includes("  ")) {
+  throw new Error("entry must not contain consecutive spaces");
+}
+
+// Byte-length guard: the scorer reads raw bytes, so the UTF-8 byte
+// length must stay within the same 180-byte budget as the code-point
+// count — a line of 180 multi-byte characters would otherwise pass the
+// code-point check but overflow the scorer's byte limit.
+const byteLength = Buffer.byteLength(LINE, "utf8");
+if (byteLength > 180) {
+  throw new Error(
+    `entry must be at most 180 bytes, got ${byteLength} bytes for ${codePoints.length} code points`
+  );
+}
 
 mkdirSync(OUTPUT_DIR, { recursive: true });
 writeFileSync(join(OUTPUT_DIR, "entry.txt"), LINE, "utf8");
